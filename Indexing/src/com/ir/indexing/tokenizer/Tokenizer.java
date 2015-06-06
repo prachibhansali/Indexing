@@ -14,7 +14,10 @@ import java.util.regex.Pattern;
 
 public class Tokenizer {
 
+	static Catalog catalog;
+
 	public static void main(String[] args) throws IOException {
+		catalog = new Catalog();
 		System.out.println("Tokenizing"+("".equals(null)));
 		File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/ap89_collection/");
 		File[] files = folder.listFiles();
@@ -39,8 +42,12 @@ public class Tokenizer {
 				Iterator positr = tokens.get(token).iterator();
 				while(positr.hasNext())
 					pos+=positr.next()+" ";
-				String str = token+" "+token.hashCode()+" 1 "+docname+" "+pos.length()+" "+pos.trim()+" ";
+				int termID = token.hashCode();
+				String str = token+" "+termID+" 1 "+docname+" "+docname.hashCode()+" "+pos.length()+" "+pos.trim()+" ";
 				pw.println(str);
+				
+				// ADD CODE TO INCLUDE TERM AND SPACE IN CATALOG
+				
 			}
 		}
 		pw.close();
