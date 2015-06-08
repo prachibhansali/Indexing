@@ -1,18 +1,23 @@
 package com.ir.indexing.tokenizer;
 
-import java.util.ArrayList;
+import java.util.LinkedList;
 
 public class Catalog {
-	ArrayList<Tuple> catalog;
+	LinkedList<Tuple> catalog;
 	
 	public Catalog()
 	{
-		catalog = new ArrayList<Tuple>();
+		catalog = new LinkedList<Tuple>();
 	}
 	
 	public void add(int termID,long offset,long size)
 	{
-		catalog.add(new Tuple(termID, offset, size));
+		catalog.addFirst(new Tuple(termID, offset, size));
+	}
+	
+	public Tuple getTupleAtIndex(int index)
+	{
+		return catalog.get(index);
 	}
 	
 }
