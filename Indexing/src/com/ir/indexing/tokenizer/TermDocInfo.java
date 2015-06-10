@@ -7,6 +7,13 @@ public class TermDocInfo {
 	int docID;
 	ArrayList<Integer> arr;
 	
+	public TermDocInfo(String docname,int docID,ArrayList<Integer> a)
+	{
+		arr = a;
+		this.docname = docname;
+		this.docID = docID;
+	}
+	
 	public TermDocInfo(String docname)
 	{
 		arr = new ArrayList<Integer>();
@@ -31,10 +38,17 @@ public class TermDocInfo {
 	
 	public String toString()
 	{
-		String output=docname+" "+docID+" ";
+		//String output=docID+" "+arr.size()+" ";
+		String output="$"+docID;
 		for(int i=0;i<arr.size();i++)
-			output+=arr.get(i)+" ";
+			output+="*"+arr.get(i);
+		//if(docID==110327427) System.out.println(output+ " "+arr.size());
 		return output.trim();
+	}
+	
+	public String nameIDMapping()
+	{
+		return (docID + " " +docname);
 	}
 	
 }

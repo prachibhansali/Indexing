@@ -1,21 +1,27 @@
 package com.ir.indexing.tokenizer;
 
 public class Tuple {
-	int termID;
-	long offset;
-	long size;
+	//int termID;
+	private long offset;
+	private long size;
 	
-	public Tuple(int termid,long offset,long size)
+	public Tuple(long offset,long size)
 	{
-		setTermID(termid);
+		//setTermID(termid);
 		setOffset(offset);
 		setSize(size);
 	}
 	
-	public int getTermID()
+	/*public int getTermID()
 	{
 		return termID;
 	}
+	
+	public void setTermID(int termid)
+	{
+		termID=termid;
+	}
+	*/
 	
 	public long getOffset()
 	{
@@ -25,11 +31,6 @@ public class Tuple {
 	public long getSize()
 	{
 		return size;
-	}
-	
-	public void setTermID(int termid)
-	{
-		termID=termid;
 	}
 	
 	public void setOffset(long offset)
@@ -42,9 +43,9 @@ public class Tuple {
 		this.size=size;
 	}
 	
-	public void setTuple(int termid,long offset,long size)
+	public void setTuple(long offset,long size)
 	{
-		setTermID(termid);
+		//setTermID(termid);
 		setOffset(offset);
 		setSize(size);
 	}
@@ -52,5 +53,10 @@ public class Tuple {
 	public Tuple getTuple()
 	{
 		return this;
+	}
+	
+	public String toString()
+	{
+		return new String(offset+" "+size);
 	}
 }
