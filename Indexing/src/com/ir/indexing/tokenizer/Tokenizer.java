@@ -18,8 +18,6 @@ public class Tokenizer {
 	public static void main(String[] args) throws Exception {
 		catalog = new Catalog();
 		HashMap<String,String> documents = generateDocTextMapping();
-		//System.out.println(new String("here is my name".getBytes());
-		// For every document extract tokens starting wit
 		performIndexing(documents);
 		//System.out.println(mergeDocumentsForTerm("-1360493730*558$2100064923*1271$-2112582739*1813*1686*103*1513*1467$-383190895*1682","$2100064923*1669$-522519784*2542$-522518760*783$-205728136*1656$-2120314277*556$586286900*440$-2120313255*1168$1287149425*699$-205728139*1203$-205728143*421$-337577418*1115$1287149401*1188$586286870*3395$-205728168*791$-2112583693*741$1347976625*17$1347976626*802*946*1755*2396*159$-2120315275*743$-205728173*1308$2100063966*1523*1623*1735$-337577446*668"+"958937384$-2051758571*803$-522520808*840$-522520647*883$1347975483*1823$460471798*2463$-2051757613*1091$2054448476*2630$460470906*483$-2120315273*547*91$-1225081068*3274$468202264*2687$468203226*1935$-1299670436*1027$2107794138*1721$-383192847*1572$-522519776*1285$1302359004*980") );
 	}
@@ -29,7 +27,7 @@ public class Tokenizer {
 		Iterator<String> docitr = documents.keySet().iterator();
 		HashMap<String,Integer> terms = new HashMap<String,Integer>();
 		HashMap<Integer,String> docs = new HashMap<Integer,String>();
-
+		
 		boolean firstentry=true;
 		int countscans=0;
 		int id = 1,doc_id=1;
@@ -98,6 +96,12 @@ public class Tokenizer {
 		}
 		printMapToFile(docroot+"Term-ID-Mappings",terms);
 		printMapToFile(docs,docroot+"Doc-ID-Mappings");
+
+		PrintWriter pw = new PrintWriter(new BufferedWriter(new FileWriter(docroot+"index.txt",true)));
+		pw.println("\\"+terms.size());
+		
+		pw.close();
+		
 	}
 
 
@@ -196,7 +200,7 @@ public class Tokenizer {
 		mergedterm+=mergeDocumentsForTerm(new String(b),new String(docb));
 		return mergedterm.trim();
 	}
-
+	
 	private static String mergeDocumentsForTerm(String str1,String str2)
 	{
 		//System.out.println(str1);
@@ -302,8 +306,8 @@ public class Tokenizer {
 
 	private static HashMap<String, String> generateDocTextMapping() throws IOException {
 		System.out.println("Tokenizing");
-		//File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/ap89_collection/");
-		File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/temp/");
+		File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/ap89_collection/");
+		//File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/temp/");
 		File[] files = folder.listFiles();
 		HashMap<String,String> documents = new HashMap<String,String>();
 
@@ -327,15 +331,11 @@ public class Tokenizer {
 	catalog.add(termID, prevTuple.getOffset()+prevTuple.getSize(), str.getBytes("UTF-8").length);*/
 	public static HashMap<String,ArrayList<Integer>> getTokens(String text) throws IOException
 	{
-		PrintWriter pw = new PrintWriter(new BufferedWriter(new FileWriter("terms",true)));
-		//System.out.println(text);
 		HashMap<String,ArrayList<Integer>> tokens = new HashMap<String,ArrayList<Integer>>();
 		Pattern p = Pattern.compile("(\\w+(\\.?\\w+)*)");
 		Matcher m = p.matcher(text);
 		int position=1;
 		while(m.find()){
-			
-			pw.println(m.group(1));
 			//System.out.println(m.start(1)+" "+m.end(1));
 			String tok = m.group(1).trim().toLowerCase();
 			//if(m.group(1).equalsIgnoreCase("20s"))  System.out.println(tokens.containsKey(tok));
@@ -346,7 +346,6 @@ public class Tokenizer {
 			tokens.put(tok,positions);
 			
 		}
-		pw.close();
 		return tokens;
 	}
 
