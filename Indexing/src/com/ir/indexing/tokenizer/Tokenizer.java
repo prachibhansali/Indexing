@@ -32,7 +32,7 @@ public class Tokenizer {
 
 		boolean firstentry=true;
 		int countscans=0;
-		int id = 10001;
+		int id = 1,doc_id=1;
 		while(docitr.hasNext())
 		{
 			HashMap<Integer,ArrayList<TermDocInfo>> termDocMapping = new HashMap<Integer,ArrayList<TermDocInfo>>();
@@ -44,15 +44,17 @@ public class Tokenizer {
 			while(counttemp<=1000&&docitr.hasNext())
 			{
 				String docname = docitr.next();
-				docs.put(docname.hashCode(), docname);
+				int docid= doc_id++;
+				docs.put(docid, docname);
+				
 				//System.out.println("Docname = "+docname);
 				counttemp++;
 				HashMap<String,ArrayList<Integer>> tokens = getTokens(documents.get(docname));
-				if(docname.equals("AP890103-0201")){
+				/*if(docname.equals("AP890103-0201")){
 				Iterator i = tokens.get("20s").iterator();
 				while(i.hasNext())
 				System.out.println("here"+i.next());
-				}
+				}*/
 				Iterator<String> tokenitr = tokens.keySet().iterator();
 				while(tokenitr.hasNext())
 				{
@@ -73,7 +75,7 @@ public class Tokenizer {
 							termDocMapping.containsKey(tokenID)
 							? termDocMapping.get(tokenID) : new ArrayList<TermDocInfo>();
 
-							TermDocInfo termdoc = new TermDocInfo(docname);
+							TermDocInfo termdoc = new TermDocInfo(docname,docid);
 							while(positr.hasNext())
 								{
 								int posn = (int) (int)positr.next();
@@ -87,17 +89,12 @@ public class Tokenizer {
 			printToFile(termDocMapping,docroot+"doc-1.txt",c);
 			c.printToFile(docroot+"catalog-1.txt");
 			if(firstentry) {
-				//System.out.println("Merging with index first time");
-				//printToFile(termDocMapping,docroot+"index.txt",c);
 				(new File(docroot+"doc-1.txt")).renameTo(new File(docroot+"index.txt"));
 				c.printToFile(docroot+"catalog.txt");
 				firstentry=false;
 				continue;
 			}
-			else {
-				//System.out.println("Merging with index ============ " + countscans);
-				MergeIndexWithDoc("doc-1.txt",c);
-			}
+			else MergeIndexWithDoc("doc-1.txt",c);
 		}
 		printMapToFile(docroot+"Term-ID-Mappings",terms);
 		printMapToFile(docs,docroot+"Doc-ID-Mappings");
@@ -153,14 +150,17 @@ public class Tokenizer {
 			}
 			else {
 				byte docb[] = getIndexedTermInfo(c,doc,termID).getBytes();
+				//System.out.println("2");
 				String news = MergeCatalogTerms(termID,indexedTerm.getBytes(),docb);
 				pw.println(news);
+				//System.out.println("4");
 				newc.add(termID, offset, news.getBytes().length);
 				offset+=news.getBytes().length+1;
 			}
 		}
 
 		Iterator<Integer> itr = c.getTermKeySet().iterator();
+		//System.out.println("6");
 		while(itr.hasNext())
 		{
 			int termid = (int) itr.next();
@@ -173,6 +173,8 @@ public class Tokenizer {
 				offset+=indexedTerm.getBytes().length+1;
 			}
 		}
+		//System.out.println("7");
+		
 		pw.close();
 		newc.printToFile(docroot+"catalog.txt");
 
@@ -191,98 +193,52 @@ public class Tokenizer {
 
 	private static String MergeCatalogTerms(int termID, byte[] b, byte[] docb) {
 		String mergedterm=""+termID;
-		if(termID==49653)
-		System.out.println("to be merged terms : "+termID+" "+new String(b)+"***"+new String(docb));
-		//System.out.println(termID);
-		mergedterm+=mergeDocumentsForTerm(termID,new String(b),new String(docb));
-		/*String str1 = extractDocInfo(new String(b));
-		String str2 = extractDocInfo(new String(docb));
-		//System.out.println("to be merged terms : "+str1+" "+str2);
-		HashMap<Integer, ArrayList<Integer>> ti2 = new HashMap<Integer, ArrayList<Integer>>();
-		getTermInfos(str1,ti2);
-		getTermInfos(str2,ti2);
-		 */
-		//String str1 = extractDocInfo(new String(b));
-		//String str2 = extractDocInfo(new String(docb));
-		//HashMap<Integer,Set<Integer>> docids = new HashMap<Integer,Set<Integer>>();
-		//mergeDocumentsForTerm(new String(b),docids);
-		//mergeDocumentsForTerm(new String(docb),docids);
-/*..-522520679
-		Iterator<Integer> keys = docids.keySet().iterator();
-		//mergedterm+=ti2.size()+" ";
-		while(keys.hasNext())
-		{
-			int key = (int) keys.next();
-			//System.out.println("keys " + key);
-			mergedterm+="$"+key;
-			Iterator<Integer> pitr=docids.get(key).iterator();
-			while(pitr.hasNext())
-				mergedterm+="*"+(int)pitr.next();
-		}
-*/
+		mergedterm+=mergeDocumentsForTerm(new String(b),new String(docb));
 		return mergedterm.trim();
 	}
 
-	private static Set<Integer> extractPosns(String[] split) {
-		Set<Integer> set = new HashSet<Integer>();
-		for(int i=1;i<split.length;i++)
-			set.add(Integer.parseInt(split[i]));
-		return set;	
-	}
-
-
-	private static String extractDocInfo(String str1, int s_index) {
-		int e_index = str1.indexOf('$', s_index+1);
-		if(e_index==-1) e_index = str1.length();
-		String docinfo = str1.substring(s_index, e_index);
-		return docinfo;
-	}
-
-	private static int extractDocID(String str1){
-		return Integer.parseInt(str1.substring(str1.indexOf('$')+1, str1.indexOf("*")));
-	}
-
-	private static String mergeDocumentsForTerm(int termid,String str1,String str2)
+	private static String mergeDocumentsForTerm(String str1,String str2)
 	{
-		String mergedterm="";
+		//System.out.println(str1);
+		String mergedterm=""+str1.substring(str1.indexOf('$'));
 		HashMap<Integer,String> docids = new HashMap<Integer,String>();
-		Pattern p = Pattern.compile("(\\$[^\\$ ]+)");
-		Pattern docidp = Pattern.compile("(\\$([^\\*]+))");
-		Matcher m1 = p.matcher(str1+" "+str2);
+		//Pattern p = Pattern.compile("(\\$[^\\$ ]+)");
+		//Pattern docidp = Pattern.compile("(\\$([^\\*]+))");
+		Pattern p = Pattern.compile("(\\$([^\\*]+))");
+		Matcher m1 = p.matcher(str2);
+		Matcher m2 = p.matcher(str1);
 		String head= "\\$";
 		String body="[^\\$ ]+";
+		HashMap<Integer,String> dups = new HashMap<Integer,String>();
+		while(m2.find())
+		{
+			//String docinfo = m2.group(0);
+			int docid = Integer.parseInt(m2.group(2));
+			
+			//int docid = Integer.parseInt(docinfo.substring(docinfo.indexOf('$')+1, docinfo.indexOf('*')));
+			docids.put(docid, "");
+		}
 		while(m1.find()){
-			String docinfo = m1.group(0);
-			Matcher docidm = docidp.matcher(docinfo);
-			int docid=0;
-			while(docidm.find())
-			{
-				docid=Integer.parseInt(docidm.group(2));
-				break;
-			}
-			if(!docids.containsKey(docid)) {
-				mergedterm+=docinfo;
-				docids.put(docid, docinfo);
-			}
-			else {
-				System.out.println(termid+" "+docid);
+			//String docinfo = m1.group(0);
+			//int docid = Integer.parseInt(docinfo.substring(docinfo.indexOf('$')+1, docinfo.indexOf('*')));
+			int docid = Integer.parseInt(m1.group(2));
+			//System.out.println(docid);
+			if(!docids.containsKey(docid));
+			else dups.put(docid, "");
+			/*else {
 				System.out.println("Very rare !!!!!!!!!!!!!!!!!!!!!!!!!!!");
 				//System.out.println(head+docid+body);
 				mergedterm=mergedterm.replaceAll(head+docid+body, "");
 				mergedterm+=MergedDocInfo(docid,docinfo,docids.get(docid));				
-			}
+			}*/
+		}
+		if(dups.size()==0) mergedterm+=str2.substring(str2.indexOf('$'));
+		else {
+			System.out.println("Very rare !!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			mergedterm=mergedterm.replaceAll(head+body, "");
+			//mergedterm+=MergedDocInfo(docid,docinfo,docids.get(docid));
 		}
 		return mergedterm;
-		/*
-		while(str1!=""&&str1.indexOf('$')!=-1)
-		{
-			String docinfo = extractDocInfo(str1,str1.indexOf('$'));
-			int docid = extractDocID(docinfo);
-			Set<Integer> positions = extractPosns(docinfo.split("\\*"));
-			if(docids.containsKey(docid)) MergeTerms(docids,positions,docid);
-			else docids.put(docid, positions);
-			str1=str1.substring(docinfo.length());
-		}*/
 	}
 
 	private static String MergedDocInfo(int docid,String docinfo1, String docinfo2) {
@@ -308,54 +264,6 @@ public class Tokenizer {
 			str+="*"+(int)pos.next();
 		return str;
 	}
-
-
-	private static void MergeTerms(HashMap<Integer, Set<Integer>> docids,
-			Set<Integer> positions, int docid) {
-		Set<Integer> docs = docids.get(docid);
-		docs.addAll(positions);
-		docids.put(docid, docs);
-	}
-
-
-	private static String extractDocInfo(String str)
-	{
-		String str1="";
-		String strarr1[] = str.split(" ");
-		for(int i=1;i<strarr1.length;i++)
-			str1+=strarr1[i]+" ";
-		return str1;
-	}
-
-	private static void getTermInfos(String str1, HashMap<Integer, ArrayList<Integer>> hashMap) {
-		String[] s = str1.split(" ");
-		int index=1;
-		for(int i=0;i<Integer.parseInt(s[0]);i++)
-		{
-			int docID = Integer.parseInt(s[index]);
-			int j=0;
-			ArrayList<Integer> posns = new ArrayList<Integer>();
-			for(j=0;j<Integer.parseInt(s[index+1]);j++)
-			{
-				//System.out.println("..."+s[index+2+j]+"...");
-				posns.add(Integer.parseInt(s[index+2+j]));
-			}
-
-			index=index+2+j;
-			if(hashMap.containsKey(docID)) 
-				posns=mergePositions(posns,hashMap.get(docID));
-
-			hashMap.put(docID,posns);
-		}
-	}
-
-	private static ArrayList<Integer> mergePositions(ArrayList<Integer> posns,
-			ArrayList<Integer> arrayList) {
-		posns.addAll(arrayList);
-		Set<Integer> set = new HashSet<Integer>(posns);
-		return new ArrayList<Integer>(set);
-	}
-
 
 	private static Catalog readCatalogIntoMemory() throws Exception {
 		Catalog c=new Catalog();
@@ -394,8 +302,8 @@ public class Tokenizer {
 
 	private static HashMap<String, String> generateDocTextMapping() throws IOException {
 		System.out.println("Tokenizing");
-		File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/ap89_collection/");
-		//File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/temp/");
+		//File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/ap89_collection/");
+		File folder = new File("/Users/prachibhansali/Documents/workspace/ElasticSearch/AP_DATA/temp/");
 		File[] files = folder.listFiles();
 		HashMap<String,String> documents = new HashMap<String,String>();
 
@@ -424,6 +332,7 @@ public class Tokenizer {
 		HashMap<String,ArrayList<Integer>> tokens = new HashMap<String,ArrayList<Integer>>();
 		Pattern p = Pattern.compile("(\\w+(\\.?\\w+)*)");
 		Matcher m = p.matcher(text);
+		int position=1;
 		while(m.find()){
 			
 			pw.println(m.group(1));
@@ -432,7 +341,7 @@ public class Tokenizer {
 			//if(m.group(1).equalsIgnoreCase("20s"))  System.out.println(tokens.containsKey(tok));
 			ArrayList<Integer> positions = tokens.containsKey(tok) ? tokens.get(tok) : new ArrayList<Integer>();
 			//if(tok.equals("20s")) System.out.println(positions.size());
-			positions.add(m.start(1));
+			positions.add(position++);
 			//if(m.group(1).equalsIgnoreCase("20s")) System.out.println("Adding..."+m.group(1)+".."+m.start(1));
 			tokens.put(tok,positions);
 			

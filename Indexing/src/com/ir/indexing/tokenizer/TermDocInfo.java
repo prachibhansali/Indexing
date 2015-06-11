@@ -14,11 +14,11 @@ public class TermDocInfo {
 		this.docID = docID;
 	}
 	
-	public TermDocInfo(String docname)
+	public TermDocInfo(String docname,int id)
 	{
 		arr = new ArrayList<Integer>();
 		this.docname=docname;
-		this.docID=docname.hashCode();
+		this.docID=id;
 	}
 	
 	public void addPosition(int posn)
