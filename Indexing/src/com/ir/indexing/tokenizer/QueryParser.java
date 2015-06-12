@@ -14,7 +14,19 @@ public class QueryParser {
 	static String docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Index-StemmerStopwords/";
 	public static void main(String[] args) throws Exception {
 		performParsing();
+		
+		/*RandomAccessFile f = new RandomAccessFile(docroot+"index.txt","rw");
+		HashMap<String,HashMap<Integer,Float>> tfindex =  new HashMap<String,HashMap<Integer,Float>>();
+		HashMap<Integer, Integer> doclengths = new HashMap<Integer,Integer>();
+		loadFromFile(terms,docs,t);
 
+		Catalog c = new Catalog();
+		c.loadFromFile(docroot+"catalog.txt");
+		ArrayList<Integer> qterms = new ArrayList<Integer>();
+		qterms.add(3178);
+		qterms.add(125);
+		qterms.add(10231);
+		SkipGramMinSpanForDoc(20,c,f,qterms);*/
 	}
 
 	private static void performParsing() throws Exception {
@@ -30,22 +42,23 @@ public class QueryParser {
 
 		HashMap<Integer,Integer> docFreq = new HashMap<Integer,Integer>();
 		double avglength = (fetchDocFreqOfAllTerms(f,c,docFreq,doclengths,t))/totaldocs;
-
+		System.out.println("********"+avglength);
+		int maxlength = Collections.max(doclengths.values());
 		// Fetch Vocabulary Count of corpus
 		long vocabcount = c.size();
 
 		// Fetching stopwords
 		HashMap<String,Integer> stopwords = new HashMap<String,Integer>();
 		extractStopwords(stopwords);
-
-		ParseQuery(f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs);
+		
+		ParseQuery(f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs,vocabcount,maxlength);
 
 	}
 
 	private static void ParseQuery(RandomAccessFile f, Catalog c,
 			HashMap<Integer, Integer> docFreq,
 			HashMap<String, Integer> stopwords, double avglength,
-			HashMap<Integer, Integer> doclengths, HashMap<Integer, String> t, int totaldocs) throws NumberFormatException, IOException {
+			HashMap<Integer, Integer> doclengths, HashMap<Integer, String> t, int totaldocs,long vocabsize, int maxlength) throws NumberFormatException, IOException {
 
 		//Start Query Parsing 
 		HashMap<Integer,HashMap<Integer,Integer>> index =  new HashMap<Integer,HashMap<Integer,Integer>>();
@@ -74,7 +87,6 @@ public class QueryParser {
 			System.out.println("Running for query " + Qnum);
 
 			for(int i=4; i<alterms.size(); i++) {
-				System.out.print("terms == " + alterms.get(i)+" ");
 				Stemmer s = new Stemmer();
 				char w[] = alterms.get(i).toLowerCase().toCharArray();
 				s.add(w, w.length);
@@ -84,11 +96,12 @@ public class QueryParser {
 				if(!stopwords.containsKey(alterms.get(i).toLowerCase().trim()))
 				{
 					String term = s.toString();
-					int id = terms.containsKey(term) ? terms.get(term) : getMax(term,t)+1;
-					//System.out.println(id+" "+t.get(id));
+					System.out.print("terms == " + term+" ");
+					if(!terms.containsKey(term)) continue;
+					int id = terms.get(term);
 					if(!index.containsKey(id))
 					{
-						System.out.println("***************** Fetching TF for " + term +"******************");
+						//System.out.println("***************** Fetching TF for " + term +"******************");
 						index.put(id,retrievePostings(f,c,id,docFreq));
 						//print(index.get(id));
 						qterms.add(id);					
@@ -113,32 +126,74 @@ public class QueryParser {
 				count+=index.get(term).get(docname);
 			}
 			TTF.put(term, count);
-			if(t.get(term).equals("iran") || t.get(term).equals("contra") ||t.get(term).equals("role")||t.get(term).equals("affair"))
-				System.out.println(t.get(term)+" "+count);
 		}
 		System.out.println("Done calculating ttfs");
-		
-		
+
+
 		for(int j=0; j<queryId.size();j++)
 		{
 			HashMap<Integer, HashMap<Integer, Double>> okapi= new HashMap<Integer, HashMap<Integer, Double>>();
 			computeOkapiValues(okapi,getDistinct(queryKeywords.get(queryId.get(j))),index,avglength,queryId.get(j).intValue(),doclengths);
-			ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,totaldocs,docFreq);
+			HashMap<Integer, Double> okapi_ranks = computeForOkapiModel(queryId.get(j),okapi);
+			/*ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,totaldocs,docFreq);
 			ArrayList<String> okapibm_ranks = computeForokapiBM25(queryId.get(j),bcons,k1,k2,queryKeywords.get(queryId.get(j)),index,avglength,doclengths,docFreq,totaldocs);
-			
+			ArrayList<String> unigramlaplace_ranks = computeForUnigramLaplace(queryId.get(j),queryKeywords.get(queryId.get(j)),index,doclengths,vocabsize);
+*/
+			SkipGramMinSpanForDoc(queryId.get(j),totaldocs,c,f,queryKeywords.get(queryId.get(j)),docFreq,okapi_ranks,maxlength);
 		}
-		print(doclengths);
-		/*System.out.println("iran");
-		print(index.get(terms.get("iran")));
-		System.out.println("contra");
-		print(index.get(terms.get("contra")));
-		System.out.println("affair");
-		print(index.get(terms.get("affair")));
-		System.out.println("role");
-		print(index.get(terms.get("role")));*/
-		
+
+		Iterator keys = doclengths.keySet().iterator();
+		PrintWriter pw = new PrintWriter("doclengths");
+		while(keys.hasNext())
+		{
+			int id = (int)keys.next();
+			pw.println(docs.get(id)+" "+doclengths.get(id) +" ");
+		}
+		pw.close();
+	}
+
+	private static HashMap<Integer, Double> computeForOkapiModel(int qnum,
+			HashMap<Integer, HashMap<Integer, Double>> okapi) throws IOException {
+		HashMap<Integer,Double> okapiresult = new HashMap<Integer,Double>();
+		Iterator terms = okapi.keySet().iterator();
+		while(terms.hasNext())
+		{
+			int term = (int) terms.next();
+			Iterator documents = okapi.get(term).keySet().iterator();
+			while(documents.hasNext())
+			{
+				int doc = (int) documents.next();
+				Double initval = okapiresult.containsKey(doc) ? okapiresult.get(doc) : 0;
+				okapiresult.put(doc, initval+okapi.get(term).get(doc));
+			}
+		}
+		return okapiresult;
 	}
 	
+	private static ArrayList<String> computeForUnigramLaplace(int qnum,
+			ArrayList<Integer> terms, HashMap<Integer, HashMap<Integer, Integer>> index,
+			HashMap<Integer, Integer> doclengths, long vocabsize) throws IOException {
+
+		HashMap<Integer,Double> unigramLaplace = new HashMap<Integer,Double>();
+
+		for(int term : getDistinct(terms))
+		{
+			Iterator docnames= doclengths.keySet().iterator();
+			while(docnames.hasNext())
+			{
+				int dname = (int) docnames.next();	
+				double initval=unigramLaplace.containsKey(dname) ? unigramLaplace.get(dname) : 0;
+				int tf = index.get(term).containsKey(dname) ? index.get(term).get(dname) : 0;
+				unigramLaplace.put(dname,initval+computeForUnigramLaplcaeForDoc(doclengths.get(dname),tf,vocabsize));
+			}
+		}
+		return rankDocuments(qnum,unigramLaplace,"UnigramLaplace.txt",1000);		
+	}
+
+	private static double computeForUnigramLaplcaeForDoc(int d,int tf,long v) {
+		return Math.log((tf+1)/(float)(d+v));
+	}
+
 	private static ArrayList<String> computeForokapiBM25(int qnum,
 			float bcons, float k1, float k2, ArrayList<Integer> terms,
 			HashMap<Integer, HashMap<Integer, Integer>> index,
@@ -200,7 +255,7 @@ public class QueryParser {
 		return rankDocuments(qnum,tfidfresult,"tf-idf.txt",1000);
 	}
 
-	
+
 	private static Double computeOkapiForDoc(HashMap<Integer,Integer> doclengths,double avgdoclength,int docno, float tf) {
 		return (tf/(tf + 0.5 + (1.5 * (doclengths.get(docno)/avgdoclength))));
 	}
@@ -215,17 +270,17 @@ public class QueryParser {
 			{
 				int dname = (int) docnames.next();	
 				h.put(dname,computeOkapiForDoc(doclengths,avgdoclength,dname,index.get(term).get(dname)));
-	//			System.out.println(t.get(term) + "occurs in "+docs.get(dname) +" "+index.get(term).get(dname)+" times.");
+				//			System.out.println(t.get(term) + "occurs in "+docs.get(dname) +" "+index.get(term).get(dname)+" times.");
 			}
 			okapi.put(term, h);
 		}
 	}
-	
+
 	private static ArrayList<Integer> getDistinct(ArrayList<Integer> terms) {
 		Set<Integer> s =new HashSet<Integer>(terms);
 		return new ArrayList<Integer>(s);
 	}
-	
+
 	private static ArrayList<String> rankDocuments(int qnum,HashMap<Integer,Double> result,String filename,int num) throws IOException {
 		ArrayList<Double> rankedscores = new ArrayList<Double>(result.values());
 		ArrayList<Integer> rankedDocs = new ArrayList<Integer>(result.keySet());
@@ -330,7 +385,7 @@ public class QueryParser {
 				docID = Integer.parseInt(docinfo.substring(0, docinfo.indexOf("*")));
 				int count = 1;//countTF(docinfo);
 				int initlength = doclengths.containsKey(docID) ? doclengths.get(docID) : 0;
-				doclengths.put(id, initlength+count);
+				doclengths.put(docID, initlength+count);
 				totallength++;
 			}
 			if(docID!=-1) docFreq.put(id, numOfDocs);
@@ -386,6 +441,173 @@ public class QueryParser {
 			int id = (int)keys.next();
 			System.out.println(id+" "+docFreq.get(id) +" ");
 		}
+	}
+
+	private static void SkipGramMinSpanForDoc(int qnum,int totaldocs,Catalog c,RandomAccessFile f,ArrayList<Integer> qterms, HashMap<Integer, Integer> docFreq, HashMap<Integer, Double> okapi_ranks, int maxlength) throws IOException
+	{
+		HashMap<Integer,Integer> doccount = new HashMap<Integer,Integer>();
+		HashMap<Integer,ArrayList<Integer>> h = new HashMap<Integer,ArrayList<Integer>>();
+		qterms = fetchTopQterms(qterms,docFreq,totaldocs);
+		Iterator<Integer> trms = qterms.iterator();
+		while(trms.hasNext()){
+			int trm = (int)trms.next();
+			System.out.println(trm+" "+t.get(trm));
+			if(!c.contains(trm)) continue;
+			else {
+				String terminfo = fetchForIDFromIndex(f, c.get(trm));
+				Pattern p = Pattern.compile("(\\$([^\\$]+))");
+				Matcher m = p.matcher(terminfo);
+				while(m.find())
+				{
+					String docinfo = m.group(2);
+					int docID = Integer.parseInt(docinfo.substring(0, docinfo.indexOf("*")));
+					int count = doccount.containsKey(docID) ? doccount.get(docID) : 0;
+					doccount.put(docID,count+1);
+				}
+			}
+		}
+		int num=0;
+		Iterator<Integer> itr = doccount.keySet().iterator();
+		while(itr.hasNext())
+		{
+			int docid = itr.next();
+			int count = doccount.get(docid);
+			ArrayList<Integer> arr = h.containsKey(count) ? h.get(count) : new ArrayList<Integer>();
+			arr.add(docid);
+			h.put(count, arr);
+		}
+
+		int max = qterms.size();
+		ArrayList<Integer> docids = new ArrayList<Integer>();
+		while(max!=0)
+		{
+			if(h.containsKey(max))
+			{
+				docids.addAll(h.get(max));
+				System.out.println("For "+max);
+				//if(max!=1) print(h.get(max));
+				num+=h.get(max).size();
+			}
+			System.out.println("Having "+max+ " "+docids.size());
+			max--;
+		}
+		
+		/*ArrayList<Integer> temp = new ArrayList<Integer>();
+		if(docids.size()>1000)
+		{
+			for(int i=1;i<docids.size() && i<1000;i++)
+				temp.add(docids.get(i));
+			docids = temp;
+		}*/
+		System.out.println("Query id : "+qnum);
+		HashMap<Integer,Double> scores = new HashMap<Integer,Double>();
+		for(int i=0;i<docids.size();i++)
+			scores.put(docids.get(i),okapi_ranks.get(docids.get(i))*findProximityWithinDoc(docids.get(i),qterms,c,f,maxlength));
+		rankDocuments(qnum,scores,"proximitySearch.txt",50);
+	}
+
+	private static ArrayList<Integer> fetchTopQterms(ArrayList<Integer> qterms,
+			HashMap<Integer, Integer> docFreq,int totaldocs) {
+		HashMap<Integer,Double> result = new HashMap<Integer,Double>();
+		for(int i=0;i<qterms.size();i++)
+			result.put(qterms.get(i), Math.log(totaldocs/docFreq.get(qterms.get(i))));
+		ArrayList<Double> rankedscores = new ArrayList<Double>(result.values());
+		ArrayList<Integer> rankedDocs = new ArrayList<Integer>(result.keySet());
+		ArrayList<Integer> rankedDocuments = new ArrayList<Integer>(qterms.size());
+		int num = qterms.size() > 5 ? 5 :  qterms.size();
+		while(!rankedDocs.isEmpty() && rankedDocuments.size()<num)
+		{
+			int position = max(rankedscores);
+			if(rankedscores.get(position) == 0) break;
+			rankedDocuments.add(rankedDocs.get(position));
+			rankedscores.remove(position);
+			rankedDocs.remove(position);
+		}
+		//System.out.println(rankedDocuments.get(0)+" "+rankedDocuments.get(1)+" "+rankedDocuments.get(2)+" ");
+		return rankedDocuments;
+	}
+
+	private static void print(ArrayList<Integer> arrayList) {
+		int num=20;
+		for(int i=0;i<arrayList.size();i++)
+			{
+			System.out.print(docs.get(arrayList.get(i)) + " ");
+			if(num==0) {
+				num=20;
+				System.out.println();
+			}
+			else num--;
+			}
+	}
+
+	private static double findProximityWithinDoc(Integer id,
+			ArrayList<Integer> qterms, Catalog c, RandomAccessFile f, int maxlength) throws IOException {
+		ArrayList<ArrayList<Integer>> pointers = new ArrayList<ArrayList<Integer>>();
+		ArrayList<Integer> queryterms = new ArrayList<Integer>();
+		for(int i=0;i<qterms.size();i++)
+		{
+			//System.out.println(qterms.get(i));
+			//if(id==29561) System.out.println("Following positions for "+qterms.get(i));
+			String terminfo = fetchForIDFromIndex(f,c.get(qterms.get(i)));
+			Pattern p = Pattern.compile("(\\$"+id+"(\\*[^\\$]+))");
+			Matcher m = p.matcher(terminfo);
+			ArrayList<Integer> positions = new ArrayList<Integer>();
+			while(m.find())
+			{
+				String[] posinfo = m.group(2).split("\\*");
+				for(int j=0;j<posinfo.length;j++)
+					{
+					if(!posinfo[j].equals("")) positions.add(Integer.parseInt(posinfo[j]));
+					if(id==29561) System.out.print(posinfo[j]+ " ");
+					}
+				break;
+			}
+			if(positions.size()!=0) {
+				queryterms.add(qterms.get(i));
+				pointers.add(positions);
+				//System.out.println("Query : "+qterms.get(i)+" for doc "+ docs.get(id)+" "+id);
+			}
+		}
+		Integer min = maxlength+1;
+		while(pointers.size()>0){
+			
+			ArrayList<Integer> firstColumn = getFirstRow(pointers);
+			min = findMinSpan(new ArrayList<Integer>(firstColumn),min);
+			int minval=maxlength+1;
+			int position =-1;
+			for(int i=0;i<firstColumn.size();i++)
+			{
+				if(firstColumn.get(i)<minval) minval = firstColumn.get(i);
+				position=i;
+			}
+			pointers.get(position).remove(0);
+			if(pointers.get(position).size()==0) break;
+		}
+		//System.out.println("Min == "+min);
+		return Math.log(queryterms.size()+0.01)*(1/(double)min);
+	}
+
+	private static int findMinSpan(ArrayList<Integer> firstColumn,int min) {
+		
+		Collections.sort(firstColumn);
+		//System.out.println("Positions "+firstColumn.get(firstColumn.size()-1)+" "+firstColumn.get(0));
+		int span = firstColumn.get(firstColumn.size()-1)-firstColumn.get(0);
+		if(span==0) return min;
+		if(span<min) {
+			//System.out.println("span : "+span);
+			return span;
+		}
+		else return min;
+	}
+
+	private static ArrayList<Integer> getFirstRow(ArrayList<ArrayList<Integer>> pointers) {
+		ArrayList<Integer> arr = new ArrayList<Integer>();
+		for(int i=0;i<pointers.size();i++)
+			{
+			arr.add(pointers.get(i).get(0));
+			//System.out.println(pointers.get(i).get(0));
+			}
+		return arr;
 	}
 
 

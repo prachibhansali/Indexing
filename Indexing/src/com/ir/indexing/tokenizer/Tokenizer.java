@@ -332,12 +332,12 @@ public class Tokenizer {
 	public static HashMap<String,ArrayList<Integer>> getTokens(String text) throws IOException
 	{
 		HashMap<String,ArrayList<Integer>> tokens = new HashMap<String,ArrayList<Integer>>();
-		Pattern p = Pattern.compile("(\\w+(\\.?\\w+)*)");
+		Pattern p = Pattern.compile("(\\w+)");
 		Matcher m = p.matcher(text);
 		int position=1;
 		while(m.find()){
 			//System.out.println(m.start(1)+" "+m.end(1));
-			String tok = m.group(1).trim().toLowerCase();
+			String tok = m.group(0).trim().toLowerCase();
 			//if(m.group(1).equalsIgnoreCase("20s"))  System.out.println(tokens.containsKey(tok));
 			ArrayList<Integer> positions = tokens.containsKey(tok) ? tokens.get(tok) : new ArrayList<Integer>();
 			//if(tok.equals("20s")) System.out.println(positions.size());
@@ -406,10 +406,11 @@ public class Tokenizer {
 					line=line.substring(textendtag + 7);
 				}
 				while(!line.contains("</DOC>"));
-				String output = text.toString();
+				String output = text.toString().toLowerCase();
 				//output = output.replaceAll("[^a-zA-z0-9.-]+", " ");
-				String formatoutput = output.replaceAll("[^\\w\\d- ]+","");
-
+				String formatoutput1 = output.replaceAll("_"," ");
+				String formatoutput = formatoutput1.replaceAll("[^\\w\\d- ]+","");
+				
 				lst.put(docno,formatoutput);
 				line = line.substring(line.indexOf("</DOC>") + 6);
 			}
