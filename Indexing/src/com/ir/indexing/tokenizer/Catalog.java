@@ -70,7 +70,7 @@ public class Catalog {
 	
 	public boolean contains(int termID)
 	{
-		return getTermKeySet().contains(termID);
+		return catalog.containsKey(termID);
 	}
 
 	public Tuple get(int termID) {
