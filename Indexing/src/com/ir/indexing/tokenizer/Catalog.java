@@ -76,10 +76,8 @@ public class Catalog {
 	public Tuple get(int termID) {
 		return catalog.get(termID);
 	}
-	
-	public void print()
-	{
-		
+
+	public void deleteID(int id) {
+		catalog.remove(id);
 	}
-	
 }

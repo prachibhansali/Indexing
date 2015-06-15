@@ -11,27 +11,26 @@ public class QueryParser {
 	static HashMap<Integer,String> t = new HashMap<Integer,String>();
 	static HashMap<Integer,String> docs = new HashMap<Integer,String>();
 
-	static String docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Index-StemmerStopwords/";
+	private static String docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerStopwords/";
 	public static void main(String[] args) throws Exception {
-		performParsing();
 		
-		/*RandomAccessFile f = new RandomAccessFile(docroot+"index.txt","rw");
-		HashMap<String,HashMap<Integer,Float>> tfindex =  new HashMap<String,HashMap<Integer,Float>>();
-		HashMap<Integer, Integer> doclengths = new HashMap<Integer,Integer>();
-		loadFromFile(terms,docs,t);
-
-		Catalog c = new Catalog();
-		c.loadFromFile(docroot+"catalog.txt");
-		ArrayList<Integer> qterms = new ArrayList<Integer>();
-		qterms.add(3178);
-		qterms.add(125);
-		qterms.add(10231);
-		SkipGramMinSpanForDoc(20,c,f,qterms);*/
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+		System.out.println("Stemming? (y/n) : ");
+		boolean stem = br.readLine().equals("y") ? true : false;
+		System.out.println("Remove Stop words? (y/n) : ");
+		boolean stop = br.readLine().equals("y") ? true : false;
+		if(stem&&stop)
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerStopwords/";
+		else if(stem&&!stop)
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerOnly/";
+		else if(!stem&&stop)
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStopWordOnly/";
+		else docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexNoStemNoStop/";
+		performParsing(stem,stop);
 	}
 
-	private static void performParsing() throws Exception {
+	private static void performParsing(boolean stem,boolean stop) throws Exception {
 		RandomAccessFile f = new RandomAccessFile(docroot+"index.txt","rw");
-		HashMap<String,HashMap<Integer,Float>> tfindex =  new HashMap<String,HashMap<Integer,Float>>();
 		HashMap<Integer, Integer> doclengths = new HashMap<Integer,Integer>();
 
 		Catalog c = new Catalog();
@@ -40,22 +39,26 @@ public class QueryParser {
 
 		int totaldocs = docs.size();
 
+		// Fetch Vocabulary Count of corpus
+		System.out.println(fetchForIDFromIndex(f,c.get(0)));
+		long vocabcount = Integer.parseInt(fetchForIDFromIndex(f,c.get(0)).split("\\\\")[1]);
+		System.out.println(vocabcount);
+		c.deleteID(0);
+        
 		HashMap<Integer,Integer> docFreq = new HashMap<Integer,Integer>();
 		double avglength = (fetchDocFreqOfAllTerms(f,c,docFreq,doclengths,t))/totaldocs;
 		System.out.println("********"+avglength);
 		int maxlength = Collections.max(doclengths.values());
-		// Fetch Vocabulary Count of corpus
-		long vocabcount = c.size();
-
+		
 		// Fetching stopwords
 		HashMap<String,Integer> stopwords = new HashMap<String,Integer>();
-		extractStopwords(stopwords);
+		if(stop) extractStopwords(stopwords);
 		
-		ParseQuery(f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs,vocabcount,maxlength);
-
+		ParseQuery(stem,stop,f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs,vocabcount,maxlength);
+		
 	}
 
-	private static void ParseQuery(RandomAccessFile f, Catalog c,
+	private static void ParseQuery(boolean stem,boolean stop,RandomAccessFile f, Catalog c,
 			HashMap<Integer, Integer> docFreq,
 			HashMap<String, Integer> stopwords, double avglength,
 			HashMap<Integer, Integer> doclengths, HashMap<Integer, String> t, int totaldocs,long vocabsize, int maxlength) throws NumberFormatException, IOException {
@@ -85,17 +88,12 @@ public class QueryParser {
 			int Qnum = Integer.parseInt(allterms[0]);
 			queryId.add(Qnum);
 			System.out.println("Running for query " + Qnum);
-
+			
 			for(int i=4; i<alterms.size(); i++) {
-				Stemmer s = new Stemmer();
-				char w[] = alterms.get(i).toLowerCase().toCharArray();
-				s.add(w, w.length);
-				s.stem();
-
-				//String s = allterms[i].toLowerCase().trim();
+								//String s = allterms[i].toLowerCase().trim();
 				if(!stopwords.containsKey(alterms.get(i).toLowerCase().trim()))
 				{
-					String term = s.toString();
+					String term = stem? applyStemmer(alterms.get(i).toLowerCase()) : alterms.get(i).toLowerCase();
 					System.out.print("terms == " + term+" ");
 					if(!terms.containsKey(term)) continue;
 					int id = terms.get(term);
@@ -129,16 +127,14 @@ public class QueryParser {
 		}
 		System.out.println("Done calculating ttfs");
 
-
 		for(int j=0; j<queryId.size();j++)
 		{
 			HashMap<Integer, HashMap<Integer, Double>> okapi= new HashMap<Integer, HashMap<Integer, Double>>();
 			computeOkapiValues(okapi,getDistinct(queryKeywords.get(queryId.get(j))),index,avglength,queryId.get(j).intValue(),doclengths);
 			HashMap<Integer, Double> okapi_ranks = computeForOkapiModel(queryId.get(j),okapi);
-			/*ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,totaldocs,docFreq);
+			ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,totaldocs,docFreq);
 			ArrayList<String> okapibm_ranks = computeForokapiBM25(queryId.get(j),bcons,k1,k2,queryKeywords.get(queryId.get(j)),index,avglength,doclengths,docFreq,totaldocs);
 			ArrayList<String> unigramlaplace_ranks = computeForUnigramLaplace(queryId.get(j),queryKeywords.get(queryId.get(j)),index,doclengths,vocabsize);
-*/
 			SkipGramMinSpanForDoc(queryId.get(j),totaldocs,c,f,queryKeywords.get(queryId.get(j)),docFreq,okapi_ranks,maxlength);
 		}
 
@@ -150,6 +146,14 @@ public class QueryParser {
 			pw.println(docs.get(id)+" "+doclengths.get(id) +" ");
 		}
 		pw.close();
+	}
+
+	private static String applyStemmer(String str) {
+		Stemmer s = new Stemmer();
+		char w[] = str.toCharArray();
+		s.add(w, w.length);
+		s.stem();
+		return s.toString();
 	}
 
 	private static HashMap<Integer, Double> computeForOkapiModel(int qnum,
@@ -514,7 +518,7 @@ public class QueryParser {
 		ArrayList<Double> rankedscores = new ArrayList<Double>(result.values());
 		ArrayList<Integer> rankedDocs = new ArrayList<Integer>(result.keySet());
 		ArrayList<Integer> rankedDocuments = new ArrayList<Integer>(qterms.size());
-		int num = qterms.size() > 5 ? 5 :  qterms.size();
+		int num = qterms.size() > 4 ? 4 :  qterms.size();
 		while(!rankedDocs.isEmpty() && rankedDocuments.size()<num)
 		{
 			int position = max(rankedscores);
@@ -565,7 +569,6 @@ public class QueryParser {
 			if(positions.size()!=0) {
 				queryterms.add(qterms.get(i));
 				pointers.add(positions);
-				//System.out.println("Query : "+qterms.get(i)+" for doc "+ docs.get(id)+" "+id);
 			}
 		}
 		Integer min = maxlength+1;
@@ -581,7 +584,8 @@ public class QueryParser {
 				position=i;
 			}
 			pointers.get(position).remove(0);
-			if(pointers.get(position).size()==0) break;
+			//if(pointers.get(position).size()==0) break;
+			if(pointers.get(position).size()==0) pointers.remove(position);
 		}
 		//System.out.println("Min == "+min);
 		return Math.log(queryterms.size()+0.01)*(1/(double)min);
@@ -609,6 +613,4 @@ public class QueryParser {
 			}
 		return arr;
 	}
-
-
 }
