@@ -5,40 +5,54 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.ir.indexing.stemmer.Stemmer;
-public class QueryParser {
+public class QueryParserMultiField {
 
 	static HashMap<String,Integer> terms = new HashMap<String,Integer>();
+	static HashMap<String,Integer> hterms = new HashMap<String,Integer>();
 	static HashMap<Integer,String> t = new HashMap<Integer,String>();
+	static HashMap<Integer,String> ht = new HashMap<Integer,String>();
 	static HashMap<Integer,String> docs = new HashMap<Integer,String>();
+	static HashMap<Integer,String> hdocs = new HashMap<Integer,String>();
 
-	private static String docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerStopwords/";
+	private static String docroot = "/Users/prachibhansali/Documents/IR/Assignment2/IndexStemmerStopwords/";
 	public static void main(String[] args) throws Exception {
-		FileCompression fc = new FileCompression();
-		fc.decompress(docroot);
+
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 		System.out.println("Stemming? (y/n) : ");
 		boolean stem = br.readLine().equals("y") ? true : false;
 		System.out.println("Remove Stop words? (y/n) : ");
 		boolean stop = br.readLine().equals("y") ? true : false;
 		if(stem&&stop)
-			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerStopwords/";
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/MultiFieldIndexing/Index-StemmerStopwords/";
 		else if(stem&&!stop)
-			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStemmerOnly/";
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/IndexStemmerOnly/";
 		else if(!stem&&stop)
-			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexStopWordOnly/";
-		else docroot = "/Users/prachibhansali/Documents/IR/Assignment2/Indexing/IndexNoStemNoStop/";
-		performParsing(stem,stop);
+			docroot = "/Users/prachibhansali/Documents/IR/Assignment2/IndexStopWordOnly/";
+		else docroot = "/Users/prachibhansali/Documents/IR/Assignment2/IndexNoStemNoStop/";
+
+		System.out.println("Multiple fields? : ");
+		boolean multifield = br.readLine().equals("y") ? true : false;
+
+		performParsing(stem,stop,multifield);
 	}
 
-	private static void performParsing(boolean stem,boolean stop) throws Exception {
+	private static void performParsing(boolean stem,boolean stop,boolean multifield) throws Exception {
 		RandomAccessFile f = new RandomAccessFile(docroot+"index.txt","rw");
+		RandomAccessFile f_header = new RandomAccessFile(docroot+"hindex.txt","rw");
+
 		HashMap<Integer, Integer> doclengths = new HashMap<Integer,Integer>();
+		HashMap<Integer, Integer> headerlengths = new HashMap<Integer,Integer>();
 
 		Catalog c = new Catalog();
 		c.loadFromFile(docroot+"catalog.txt");
-		loadFromFile(terms,docs,t);
+		Catalog hc = new Catalog();
+		hc.loadFromFile(docroot+"hcatalog.txt");
+
+		loadFromFile(terms,docs,t,"");
+		loadFromFile(hterms,hdocs,ht,"Header-");
 
 		int totaldocs = docs.size();
+		int totalheaders = hdocs.size();
 
 		// Fetch Vocabulary Count of corpus
 		System.out.println(fetchForIDFromIndex(f,c.get(0)));
@@ -46,26 +60,40 @@ public class QueryParser {
 		System.out.println(vocabcount);
 		c.deleteID(0);
 
+		System.out.println(fetchForIDFromIndex(f_header,hc.get(0)));
+		long headervocabcount = Integer.parseInt(fetchForIDFromIndex(f_header,hc.get(0)).split("\\\\")[1]);
+		System.out.println(headervocabcount);
+		c.deleteID(0);
+
 		HashMap<Integer,Integer> docFreq = new HashMap<Integer,Integer>();
 		double avglength = (fetchDocFreqOfAllTerms(f,c,docFreq,doclengths,t))/totaldocs;
 		System.out.println("********"+avglength);
 		int maxlength = Collections.max(doclengths.values());
 
+		HashMap<Integer,Integer> headerFreq = new HashMap<Integer,Integer>();
+		double avgheaderlength = (fetchDocFreqOfAllTerms(f_header,hc,headerFreq,headerlengths,ht))/totalheaders;
+		System.out.println("********header "+avgheaderlength);
+		int maxheaderlength = Collections.max(headerlengths.values());
+
 		// Fetching stopwords
 		HashMap<String,Integer> stopwords = new HashMap<String,Integer>();
 		if(stop) extractStopwords(stopwords);
 
-		ParseQuery(stem,stop,f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs,vocabcount,maxlength);
+		ParseQuery(stem,stop,multifield,f,c,docFreq,stopwords,avglength,doclengths,t,totaldocs,vocabcount,maxlength,
+				f_header,hc,headerFreq,avgheaderlength,headerlengths,totalheaders,headervocabcount,maxheaderlength);
 
 	}
 
-	private static void ParseQuery(boolean stem,boolean stop,RandomAccessFile f, Catalog c,
+	private static void ParseQuery(boolean stem,boolean stop,boolean multifield,RandomAccessFile f, Catalog c,
 			HashMap<Integer, Integer> docFreq,
 			HashMap<String, Integer> stopwords, double avglength,
-			HashMap<Integer, Integer> doclengths, HashMap<Integer, String> t, int totaldocs,long vocabsize, int maxlength) throws NumberFormatException, IOException {
+			HashMap<Integer, Integer> doclengths, HashMap<Integer, String> t, int totaldocs,long vocabsize, int maxlength,
+			RandomAccessFile f_header, Catalog hc, HashMap<Integer, Integer> headerFreq, double avgheaderlength, 
+			HashMap<Integer, Integer> headerlengths, int totalheaders, long headervocabcount, int maxheaderlength) throws NumberFormatException, IOException {
 
 		//Start Query Parsing 
 		HashMap<Integer,HashMap<Integer,Integer>> index =  new HashMap<Integer,HashMap<Integer,Integer>>();
+		HashMap<Integer,HashMap<Integer,Integer>> hindex =  new HashMap<Integer,HashMap<Integer,Integer>>();
 		HashMap<Integer,ArrayList<Integer>> queryKeywords = new  HashMap<Integer,ArrayList<Integer>>();
 		ArrayList<Integer> queryId = new ArrayList<Integer>();
 		float bcons=0.75f, k1=1.2f, k2=2;
@@ -100,8 +128,14 @@ public class QueryParser {
 					int id = terms.get(term);
 					if(!index.containsKey(id))
 					{
+						//System.out.println("***************** Fetching TF for " + term +"******************");
 						index.put(id,retrievePostings(f,c,id,docFreq));
+						//print(index.get(id));
 						qterms.add(id);					
+					}
+					if(!hindex.containsKey(id))
+					{
+						hindex.put(id,retrievePostings(f_header,hc,id,headerFreq));
 					}
 				}
 			}
@@ -122,19 +156,31 @@ public class QueryParser {
 				int docname = (int) doc_itr.next();
 				count+=index.get(term).get(docname);
 			}
+			if(hindex.containsKey(term)){
+				Iterator header_itr = hindex.get(term).keySet().iterator();
+				while(header_itr.hasNext()){
+					int docname = (int) header_itr.next();
+					count+=hindex.get(term).get(docname);
+				}
+			}
 			TTF.put(term, count);
 		}
 		System.out.println("Done calculating ttfs");
-
+		hindex = multifield? hindex : new HashMap<Integer, HashMap<Integer, Integer>>();
 		for(int j=0; j<queryId.size();j++)
 		{
 			HashMap<Integer, HashMap<Integer, Double>> okapi= new HashMap<Integer, HashMap<Integer, Double>>();
-			computeOkapiValues(okapi,getDistinct(queryKeywords.get(queryId.get(j))),index,avglength,queryId.get(j).intValue(),doclengths);
+			HashMap<Integer, HashMap<Integer, Double>> h_okapi= new HashMap<Integer, HashMap<Integer, Double>>();
 			HashMap<Integer, Double> okapi_ranks = computeForOkapiModel(queryId.get(j),okapi);
-			ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,totaldocs,docFreq);
-			ArrayList<String> okapibm_ranks = computeForokapiBM25(queryId.get(j),bcons,k1,k2,queryKeywords.get(queryId.get(j)),index,avglength,doclengths,docFreq,totaldocs);
-			ArrayList<String> unigramlaplace_ranks = computeForUnigramLaplace(queryId.get(j),queryKeywords.get(queryId.get(j)),index,doclengths,vocabsize);
-			SkipGramMinSpanForDoc(queryId.get(j),totaldocs,c,f,queryKeywords.get(queryId.get(j)),docFreq,okapi_ranks,maxlength);
+			computeOkapiValues(okapi,getDistinct(queryKeywords.get(queryId.get(j))),index,avglength,queryId.get(j).intValue(),doclengths);
+			computeOkapiValues(h_okapi,getDistinct(queryKeywords.get(queryId.get(j))),hindex,avgheaderlength,queryId.get(j).intValue(),headerlengths);
+			ArrayList<String> tfidf = computeFortfidfModel(queryId.get(j),okapi,h_okapi,totaldocs,docFreq
+															,totalheaders,headerFreq);
+			ArrayList<String> okapibm_ranks = computeForokapiBM25(queryId.get(j),bcons,k1,k2,queryKeywords.get(queryId.get(j)),
+					index,avglength,doclengths,docFreq,totaldocs,hindex,avgheaderlength,headerlengths,headerFreq,totalheaders);
+			ArrayList<String> unigramlaplace_ranks = computeForUnigramLaplace(queryId.get(j),queryKeywords.get(queryId.get(j)),
+					index,doclengths,vocabsize,hindex,headerlengths,headervocabcount);
+			//SkipGramMinSpanForDoc(queryId.get(j),totaldocs,c,f,queryKeywords.get(queryId.get(j)),docFreq,okapi_ranks,maxlength);
 		}
 
 		Iterator keys = doclengths.keySet().iterator();
@@ -175,7 +221,7 @@ public class QueryParser {
 
 	private static ArrayList<String> computeForUnigramLaplace(int qnum,
 			ArrayList<Integer> terms, HashMap<Integer, HashMap<Integer, Integer>> index,
-			HashMap<Integer, Integer> doclengths, long vocabsize) throws IOException {
+			HashMap<Integer, Integer> doclengths, long vocabsize, HashMap<Integer, HashMap<Integer, Integer>> hindex, HashMap<Integer, Integer> headerlengths, long headervocabcount) throws IOException {
 
 		HashMap<Integer,Double> unigramLaplace = new HashMap<Integer,Double>();
 
@@ -189,6 +235,18 @@ public class QueryParser {
 				int tf = index.get(term).containsKey(dname) ? index.get(term).get(dname) : 0;
 				unigramLaplace.put(dname,initval+computeForUnigramLaplcaeForDoc(doclengths.get(dname),tf,vocabsize));
 			}
+			
+			if(hindex.containsKey(term)) {
+				Iterator headers = hindex.get(term).keySet().iterator();
+				while(headers.hasNext())
+				{
+					int doc = (int) headers.next();
+					Double initval = unigramLaplace.containsKey(doc) ? unigramLaplace.get(doc) : 0;
+					int tf = hindex.get(term).containsKey(doc) ? hindex.get(term).get(doc) : 0;
+					unigramLaplace.put(doc,(5*initval+8*computeForUnigramLaplcaeForDoc
+							(headerlengths.get(doc),tf,headervocabcount))/13);
+				}
+			}
 		}
 		return rankDocuments(qnum,unigramLaplace,"UnigramLaplace.txt",1000);		
 	}
@@ -201,7 +259,7 @@ public class QueryParser {
 			float bcons, float k1, float k2, ArrayList<Integer> terms,
 			HashMap<Integer, HashMap<Integer, Integer>> index,
 			double avglength, HashMap<Integer, Integer> doclengths,
-			HashMap<Integer, Integer> docFreq, int totaldocs) throws IOException {
+			HashMap<Integer, Integer> docFreq, int totaldocs, HashMap<Integer, HashMap<Integer, Integer>> hindex, double avgheaderlength, HashMap<Integer, Integer> headerlengths, HashMap<Integer, Integer> headerFreq, int totalheaders) throws IOException {
 		HashMap<Integer, Double> okapiBM25 = new HashMap<Integer,Double>();
 		for(int term : getDistinct(terms))
 		{
@@ -216,6 +274,18 @@ public class QueryParser {
 				okapiBM25.put(dname,initval+computeForokapiBM25ForDoc(qtf,bcons,k1,k2,totaldocs,doclengths.get(dname)
 						,df,avglength,dname,index.get(term).get(dname)));			
 			}
+			
+			if(hindex.containsKey(term)) {
+				Iterator headers = hindex.get(term).keySet().iterator();
+				while(headers.hasNext())
+				{
+					int doc = (int) headers.next();
+					Double initval = okapiBM25.containsKey(doc) ? okapiBM25.get(doc) : 0;
+					okapiBM25.put(doc,(5*initval+6*computeForokapiBM25ForDoc(qtf,bcons,k1,k2,totalheaders,headerlengths.get(doc)
+							,headerFreq.get(term),avgheaderlength,doc,hindex.get(term).get(doc)))/11);	
+				}
+			}
+
 		}
 		return rankDocuments(qnum,okapiBM25,"okapiBM25.txt",1000);
 	}
@@ -240,8 +310,8 @@ public class QueryParser {
 	}
 
 	private static ArrayList<String> computeFortfidfModel(Integer qnum,
-			HashMap<Integer, HashMap<Integer, Double>> okapi, int totaldocs,
-			HashMap<Integer, Integer> docFreq) throws IOException {
+			HashMap<Integer, HashMap<Integer, Double>> okapi, HashMap<Integer, HashMap<Integer, Double>> h_okapi, int totaldocs,
+			HashMap<Integer, Integer> docFreq, int totalheaders, HashMap<Integer, Integer> headerFreq) throws IOException {
 		HashMap<Integer,Double> tfidfresult = new HashMap<Integer,Double>();
 		Iterator terms = okapi.keySet().iterator();
 		while(terms.hasNext())
@@ -254,6 +324,16 @@ public class QueryParser {
 				Double initval = tfidfresult.containsKey(doc) ? tfidfresult.get(doc) : 0;
 				tfidfresult.put(doc, initval+(okapi.get(term).get(doc) * Math.log(totaldocs/(float)docFreq.get(term))));
 			}
+
+			if(h_okapi.containsKey(term)) {
+				Iterator headers = h_okapi.get(term).keySet().iterator();
+				while(headers.hasNext())
+				{
+					int doc = (int) headers.next();
+					Double initval = tfidfresult.containsKey(doc) ? tfidfresult.get(doc) : 0;
+					tfidfresult.put(doc, (5*initval+6*(h_okapi.get(term).get(doc) * Math.log(totalheaders/(float)headerFreq.get(term))))/11);
+				}
+			}
 		}
 		return rankDocuments(qnum,tfidfresult,"tf-idf.txt",1000);
 	}
@@ -265,6 +345,7 @@ public class QueryParser {
 
 	private static void computeOkapiValues(HashMap<Integer, HashMap<Integer,Double>> okapi,
 			List<Integer> terms, HashMap<Integer, HashMap<Integer, Integer>> index, double avgdoclength, int qnum, HashMap<Integer, Integer> doclengths) throws IOException {
+		if(index.size()==0) return;
 		for(int term : terms)
 		{
 			Iterator docnames= index.get(term).keySet().iterator();
@@ -275,6 +356,7 @@ public class QueryParser {
 				h.put(dname,computeOkapiForDoc(doclengths,avgdoclength,dname,index.get(term).get(dname)));
 				//			System.out.println(t.get(term) + "occurs in "+docs.get(dname) +" "+index.get(term).get(dname)+" times.");
 			}
+
 			okapi.put(term, h);
 		}
 	}
@@ -349,9 +431,9 @@ public class QueryParser {
 	}
 
 	private static void loadFromFile(HashMap<String, Integer> terms,
-			HashMap<Integer, String> docs,HashMap<Integer,String> t) throws Exception 
+			HashMap<Integer, String> docs,HashMap<Integer,String> t,String fileappend) throws Exception 
 	{
-		BufferedReader br = new BufferedReader(new FileReader(docroot+"Term-ID-Mappings"));
+		BufferedReader br = new BufferedReader(new FileReader(docroot+fileappend+"Term-ID-Mappings"));
 		String line = "";
 		while((line=br.readLine())!=null)
 		{
@@ -359,7 +441,7 @@ public class QueryParser {
 			t.put(Integer.parseInt(line.split(" ")[1]),line.split(" ")[0]);
 		}
 		br.close();
-		br = new BufferedReader(new FileReader(docroot+"Doc-ID-Mappings"));
+		br = new BufferedReader(new FileReader(docroot+fileappend+"Doc-ID-Mappings"));
 		line = "";
 		while((line=br.readLine())!=null)
 			docs.put(Integer.parseInt(line.split(" ")[0]),line.split(" ")[1]);
@@ -487,13 +569,21 @@ public class QueryParser {
 			if(h.containsKey(max))
 			{
 				docids.addAll(h.get(max));
-				//System.out.println("For "+max);
+				System.out.println("For "+max);
 				//if(max!=1) print(h.get(max));
 				num+=h.get(max).size();
 			}
+			System.out.println("Having "+max+ " "+docids.size());
 			max--;
 		}
 
+		/*ArrayList<Integer> temp = new ArrayList<Integer>();
+		if(docids.size()>1000)
+		{
+			for(int i=1;i<docids.size() && i<1000;i++)
+				temp.add(docids.get(i));
+			docids = temp;
+		}*/
 		System.out.println("Query id : "+qnum);
 		HashMap<Integer,Double> scores = new HashMap<Integer,Double>();
 		for(int i=0;i<docids.size();i++)
